@@ -213,31 +213,54 @@ boolean FtpServer::processCommand()
   ///////////////////////////////////////
 
   //
+  //  PWD - Print Directory
+  //
+  if( ! strcmp( command, "PWD" )
+        || ( ! strcmp( command, "CWD" ) && ! strcmp( parameters, "." )))
+    client.println( "257 \"" + String(cwdName) + "\" is your current directory");
+
+  //
   //  CDUP - Change to Parent Directory 
   //
-  if( ! strcmp( command, "CDUP" ))
+  else if( ! strcmp( command, "CDUP" )
+        || ( ! strcmp( command, "CWD" ) && ! strcmp( parameters, ".." )))
   {
-	  client.println("250 Ok. Current directory is " + String(cwdName));
+    bool ok = false;
+    
+    if( strlen( cwdName ) > 1 )            // do nothing if cwdName is root
+    {
+      // if cwdName ends with '/', remove it (must not append)
+      if( cwdName[ strlen( cwdName ) - 1 ] == '/' )
+        cwdName[ strlen( cwdName ) - 1 ] = 0;
+      // search last '/'
+      char * pSep = strrchr( cwdName, '/' );
+      ok = pSep > cwdName;
+      // if found, ends the string on its position
+      if( ok )
+      {
+        * pSep = 0;
+        ok = SD.exists( cwdName );
+      }
+    }
+    // if an error appends, move to root
+    if( ! ok )
+      strcpy( cwdName, "/" );
+    client.println( "250 Ok. Current directory is " + String(cwdName) );
   }
   //
   //  CWD - Change Working Directory
   //
-  else if( ! strcmp( command, "CWD" ))
+  else if( ! strcmp( command, "CWD" ) )
   {
     char path[ FTP_CWD_SIZE ];
-    if( strcmp( parameters, "." ) == 0 )  // 'CWD .' is the same as PWD command
-      client.println( "257 \"" + String(cwdName) + "\" is your current directory");
-    else 
-      {       
-        client.println( "250 Ok. Current directory is " + String(cwdName) );
-      }
-    
+    if( strlen( parameters ) == 0 )
+      client.println( "501 No file name");
+    else if ( makePath( path ) && SD.exists( path ) ) {
+      strcpy( cwdName, path );
+      client.println( "250 Ok. Directory changed to " + String(cwdName) );
+    }
   }
-  //
-  //  PWD - Print Directory
-  //
-  else if( ! strcmp( command, "PWD" ))
-    client.println( "257 \"" + String(cwdName) + "\" is your current directory");
+
   //
   //  QUIT
   //
@@ -390,11 +413,13 @@ boolean FtpServer::processCommand()
       else
       {
         File file = dir.openNextFile();
+        int len = strlen( cwdName );
+        if (len > 1) len += 1;
         while( file)
         {
     			String fn, fs;
-          fn = file.name();
-    			fn.remove(0, 1);
+            fn = file.name();
+            fn = fn.substring(len);
       		#ifdef FTP_DEBUG
   			  Serial.println("File Name = "+ fn);
       		#endif
@@ -433,6 +458,8 @@ boolean FtpServer::processCommand()
 //        client.println( "550 Can't open directory " +String(parameters) );
       else
       {
+        int len = strlen ( cwdName );
+        if (len > 1) len += 1;
 //        while( dir.next())
         File file = dir.openNextFile();
 //        while( dir.openNextFile())
@@ -440,7 +467,7 @@ boolean FtpServer::processCommand()
     		{
     			String fn,fs;
           fn = file.name();
-    			fn.remove(0, 1);
+          fn = fn.substring(len);
           fs = String(file.size());
           if(file.isDirectory()){
             data.println( "Type=dir;Size=" + fs + ";"+"modify=20000101000000;" +" " + fn);
