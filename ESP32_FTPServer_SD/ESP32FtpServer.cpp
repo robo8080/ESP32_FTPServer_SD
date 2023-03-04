@@ -18,6 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 //  2017: modified by @robo8080
+//  2023: modified by @KyleMolinari
 
 #include "ESP32FtpServer.h"
 
@@ -29,6 +30,8 @@
 #include "SPI.h"
 
 //#define FTP_DEBUG
+
+#define ROOTDIR "/"
 
 
 WiFiServer ftpServer( FTP_CTRL_PORT );
@@ -59,7 +62,7 @@ void FtpServer::iniVariables()
   dataPassiveConn = true;
   
   // Set the root directory
-  strcpy( cwdName, "/" );
+  strcpy( cwdName, ROOTDIR );
 
   rnfrCmd = false;
   transferStatus = 0;
@@ -179,7 +182,7 @@ boolean FtpServer::userIdentity()
   else
   {
     client.println( "331 OK. Password required");
-    strcpy( cwdName, "/" );
+    strcpy( cwdName, ROOTDIR );
     return true;
   }
   millisDelay = millis() + 100;  // delay of 100 ms
@@ -217,6 +220,7 @@ boolean FtpServer::processCommand()
   //
   if( ! strcmp( command, "CDUP" ))
   {
+    strcpy(cwdName, "/");
 	  client.println("250 Ok. Current directory is " + String(cwdName));
   }
   //
@@ -225,10 +229,13 @@ boolean FtpServer::processCommand()
   else if( ! strcmp( command, "CWD" ))
   {
     char path[ FTP_CWD_SIZE ];
-    if( strcmp( parameters, "." ) == 0 )  // 'CWD .' is the same as PWD command
-      client.println( "257 \"" + String(cwdName) + "\" is your current directory");
+    if( strcmp( parameters, "." ) == 0 || strcmp( parameters, "/" ) == 0 || strlen(parameters) == 0){ // 'CWD .' is the same as PWD command
+      strcpy(cwdName, parameters);
+      client.println( "257 \"" + String(cwdName) + "\" is your current directory");  
+    }
     else 
-      {       
+      { 
+        strcpy(cwdName, parameters);      
         client.println( "250 Ok. Current directory is " + String(cwdName) );
       }
     
@@ -394,7 +401,7 @@ boolean FtpServer::processCommand()
         {
     			String fn, fs;
           fn = file.name();
-    			fn.remove(0, 1);
+//    			fn.remove(0, 1);
       		#ifdef FTP_DEBUG
   			  Serial.println("File Name = "+ fn);
       		#endif
@@ -424,7 +431,26 @@ boolean FtpServer::processCommand()
     {
 	  client.println( "150 Accepted data connection");
       uint16_t nm = 0;
-//      Dir dir= SD.openDir(cwdName);
+
+      //cwdName can be Null, "/", "/FolderName", or "FolderName"
+      // if Null or "/", set cwdName = ROOTDIR
+      // if "FolderName", need to add "/" prefix
+      // if "/FolderName", then continue
+      if(strlen(cwdName) == 0 || strcmp(cwdName, "/") == 0){
+        strcpy(cwdName, ROOTDIR);
+      }
+      else if(cwdName[0] != '/'){
+        strcpy(tempPath, "/");
+        strncat(tempPath, cwdName, FTP_CWD_SIZE);
+        strcpy(cwdName, tempPath);
+      }
+
+      #ifdef FTP_DEBUG
+        Serial.println( "cwdName: "+String(cwdName)) ;
+      #endif
+        
+      
+      
       File dir= SD.open(cwdName);
       char dtStr[ 15 ];
     //  if(!SD.exists(cwdName))
@@ -440,7 +466,7 @@ boolean FtpServer::processCommand()
     		{
     			String fn,fs;
           fn = file.name();
-    			fn.remove(0, 1);
+//    			fn.remove(0, 1);
           fs = String(file.size());
           if(file.isDirectory()){
             data.println( "Type=dir;Size=" + fs + ";"+"modify=20000101000000;" +" " + fn);
@@ -562,15 +588,38 @@ boolean FtpServer::processCommand()
   //
   else if( ! strcmp( command, "MKD" ))
   {
-	  client.println( "550 Can't create \"" + String(parameters));  //not support on espyet
+
+    if( strlen( parameters ) == 0 || strcmp(parameters, "/") == 0){
+      client.println("Invalid directory or file name.");  
+    }
+    else if(SD.mkdir(parameters)){
+      client.println( "Directory " + String(parameters) + " created");
+    }
+    else if(SD.mkdir("/"+String(parameters))){
+      client.println( "Directory " + String(parameters) + " created");
+    }
+    else{
+      client.println( "550 Can't create " + String(parameters));
+    }
   }
   //
   //  RMD - Remove a Directory 
   //
   else if( ! strcmp( command, "RMD" ))
   {
-	  client.println( "501 Can't delete \"" +String(parameters));
-	
+
+    if( strlen( parameters ) == 0 || strcmp(parameters, "/") == 0){
+      client.println("Invalid directory or file name.");  
+    }
+    else if(SD.rmdir(parameters)){
+      client.println( "Directory " + String(parameters) + " removed");
+    }
+    else if(SD.rmdir("/" + String(parameters))){
+      client.println( "Directory " + String(parameters) + " removed");
+    }
+    else{
+      client.println( "550 Can't remove " + String(parameters));
+    }
   }
   //
   //  RNFR - Rename From 
@@ -950,4 +999,3 @@ char * FtpServer::makeDateTimeStr( char * tstr, uint16_t date, uint16_t time )
            ( time & 0xF800 ) >> 11, ( time & 0x07E0 ) >> 5, ( time & 0x001F ) << 1 );            
   return tstr;
 }
-

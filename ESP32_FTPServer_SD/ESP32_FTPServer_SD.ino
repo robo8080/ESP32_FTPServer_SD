@@ -1,6 +1,11 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include "ESP32FtpServer.h"
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
+
+#define SD_CS 5 //CS Pin
 
 const char* ssid = "*********************";
 const char* password = "*********************";
@@ -25,7 +30,7 @@ void setup(void){
 
   /////FTP Setup, ensure SD is started before ftp;  /////////
   
-  if (SD.begin()) {
+  if (SD.begin(SD_CS)) {
       Serial.println("SD opened!");
       ftpSrv.begin("esp32","esp32");    //username, password for ftp.  set ports in ESP32FtpServer.h  (default 21, 50009 for PASV)
   }    

@@ -19,6 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 //  2017: modified by @robo8080
+//  2023: modified by @KyleMolinari
 
 /*******************************************************************************
  **                                                                            **
@@ -27,7 +28,7 @@
  *******************************************************************************/
 
 // Uncomment to print debugging info to console attached to ESP8266
-//#define FTP_DEBUG
+#define FTP_DEBUG
 
 #ifndef FTP_SERVERESP_H
 #define FTP_SERVERESP_H
@@ -46,7 +47,7 @@
 #define FTP_CMD_SIZE 255 + 8 // max size of a command
 #define FTP_CWD_SIZE 255 + 8 // max size of a directory name
 #define FTP_FIL_SIZE 255     // max size of a file name
-#define FTP_BUF_SIZE 1024 //512   // size of file buffer for read/write
+#define FTP_BUF_SIZE 2048 //1024   // size of file buffer for read/write
 
 class FtpServer
 {
@@ -81,9 +82,11 @@ private:
   
   boolean  dataPassiveConn;
   uint16_t dataPort;
+  char     slash = '/';
   char     buf[ FTP_BUF_SIZE ];       // data buffer for transfers
   char     cmdLine[ FTP_CMD_SIZE ];   // where to store incoming char from client
   char     cwdName[ FTP_CWD_SIZE ];   // name of current directory
+  char     tempPath[FTP_CWD_SIZE];    // temporary string used to add "/" prefix to cwdName
   char     command[ 5 ];              // command sent by client
   boolean  rnfrCmd;                   // previous command was RNFR
   char *   parameters;                // point to begin of parameters sent by client
@@ -103,5 +106,3 @@ private:
 };
 
 #endif // FTP_SERVERESP_H
-
-
